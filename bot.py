@@ -131,7 +131,16 @@ async def push_context(body: CtxBody):
 @app.post("/v1/tick")
 async def tick(body: TickBody):
     actions = []
-    for trg_id in body.available_triggers:
+    
+    triggers_to_process = body.available_triggers
+    # If no explicit triggers provided but merchant_id is present, find all triggers for this merchant
+    if not triggers_to_process and body.merchant_id:
+        triggers_to_process = [
+            k[1] for k, v in contexts.items() 
+            if k[0] == "trigger" and v.get("payload", {}).get("merchant_id") == body.merchant_id
+        ]
+        
+    for trg_id in triggers_to_process:
         trg_data = contexts.get(("trigger", trg_id), {}).get("payload")
         if not trg_data:
             continue
