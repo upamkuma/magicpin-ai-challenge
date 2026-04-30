@@ -14,7 +14,7 @@ Scoring dimensions:
     - Clarity    (0-2): Is there a single, clear ask?
     - Trust      (0-1): Are claims backed by data or sources?
 
-Messages scoring below 7/10 are blocked.
+Messages scoring below 5/10 are blocked.
 """
 
 import re
@@ -342,13 +342,13 @@ def evaluate_message(
         total = max(total - 2, 0)
 
     # ── Final decision ──
-    allow = total >= 7
+    allow = total >= 5
 
     if allow:
         reason = f"Approved (score {total}/10). Grounded in {trigger_kind} trigger with {r_rel}."
     else:
         weakest = min(dimension_scores.items(), key=lambda x: x[1][0])[0]
-        reason = f"Blocked (score {total}/10 < threshold 7). Weakest dimension: {weakest}."
+        reason = f"Blocked (score {total}/10 < threshold 5). Weakest dimension: {weakest}."
 
     return {
         "allow": allow,

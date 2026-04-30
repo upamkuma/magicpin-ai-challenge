@@ -2,10 +2,11 @@
 """Load all expanded dataset into the running bot."""
 
 import json
+import os
 import urllib.request
 from pathlib import Path
 
-BOT = "http://localhost:8080"
+BOT = os.environ.get("BOT_URL", "http://localhost:8080")
 EXPANDED = Path(__file__).parent / "dataset" / "expanded"
 
 def post(path, data):

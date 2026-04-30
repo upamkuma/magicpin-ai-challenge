@@ -6,6 +6,7 @@ Smart, context-aware merchant messaging assistant.
 
 import os, time, json, re, uuid
 from datetime import datetime
+from pathlib import Path
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -19,6 +20,34 @@ contexts: Dict[Tuple[str, str], dict] = {}
 conversations: Dict[str, list] = {}
 suppressed: Set[str] = set()
 ended_convos: Set[str] = set()
+
+# ─── Auto-load dataset on startup ───
+@app.on_event("startup")
+async def _auto_load_dataset():
+    """Pre-load expanded dataset from disk so the bot is ready immediately."""
+    base = Path(__file__).parent / "dataset" / "expanded"
+    if not base.exists():
+        return
+    loaded = 0
+    for scope, subdir, key_field in [
+        ("category", "categories", "slug"),
+        ("merchant", "merchants", "merchant_id"),
+        ("customer", "customers", "customer_id"),
+        ("trigger", "triggers", "id"),
+    ]:
+        d = base / subdir
+        if not d.exists():
+            continue
+        for f in d.glob("*.json"):
+            try:
+                data = json.loads(f.read_text())
+                cid = data.get(key_field, f.stem)
+                contexts[(scope, cid)] = {"version": 1, "payload": data}
+                loaded += 1
+            except Exception:
+                pass
+    if loaded:
+        print(f"[startup] Auto-loaded {loaded} contexts from {base}")
 
 # ─── Models ───
 
@@ -235,6 +264,53 @@ def compose_message(category, merchant, trigger, customer, trg_id, conv_id):
             if d.get("id") == item_id:
                 return d
         return None
+
+    # ── Enrich placeholder payloads with sensible defaults from context ──
+    if payload.get("placeholder"):
+        delta_7d = perf.get("delta_7d", {})
+        if kind == "perf_dip":
+            worst = "views" if abs(delta_7d.get("views_pct", 0)) >= abs(delta_7d.get("calls_pct", 0)) else "calls"
+            payload = {"metric": worst, "delta_pct": delta_7d.get(f"{worst}_pct", -0.15)}
+        elif kind == "perf_spike":
+            best = "views" if delta_7d.get("views_pct", 0) >= delta_7d.get("calls_pct", 0) else "calls"
+            payload = {"metric": best, "delta_pct": abs(delta_7d.get(f"{best}_pct", 0.10)), "likely_driver": "recent activity"}
+        elif kind == "milestone_reached":
+            v = perf.get("views", 0)
+            milestone = ((v // 500) + 1) * 500 if v else 1000
+            payload = {"metric": "profile views", "value_now": v, "milestone_value": milestone}
+        elif kind == "dormant_with_vera":
+            payload = {"days_since_last_merchant_message": 14}
+        elif kind == "festival_upcoming":
+            payload = {"festival": "Independence Day", "days_until": 108}
+        elif kind == "competitor_opened":
+            payload = {"competitor_name": "a nearby business", "distance_km": 1.5, "their_offer": ""}
+        elif kind == "recall_due":
+            payload = {"service_due": "follow-up session", "available_slots": [{"label": "next Monday"}, {"label": "next Wednesday"}]}
+        elif kind == "customer_lapsed_soft":
+            payload = {"days_since_last_visit": 90}
+        elif kind == "appointment_tomorrow":
+            payload = {"appointment_time": "10:00 AM", "service": "appointment"}
+        elif kind == "chronic_refill_due":
+            payload = {"molecule_list": ["prescribed medication"], "stock_runs_out_iso": "2026-05-05"}
+        elif kind == "trial_followup":
+            payload = {"next_session_options": [{"label": "next Monday morning"}]}
+        elif kind == "review_theme_emerged":
+            themes = merchant.get("review_themes", [])
+            if themes:
+                t = themes[0]
+                payload = {"theme": t.get("theme", "service quality"), "occurrences_30d": t.get("occurrences_30d", 3), "common_quote": ""}
+            else:
+                payload = {"theme": "service quality", "occurrences_30d": 3, "common_quote": ""}
+        elif kind == "renewal_due":
+            sub = merchant.get("subscription", {})
+            payload = {"days_remaining": sub.get("days_remaining", 30), "plan": sub.get("plan", "Pro")}
+        elif kind == "curious_ask_due":
+            payload = {}
+        elif kind == "research_digest":
+            if digest:
+                payload = {"top_item_id": digest[0].get("id", "")}
+            else:
+                payload = {}
 
     body, cta, rationale = "", "open_ended", ""
 
