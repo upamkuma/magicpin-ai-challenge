@@ -59,7 +59,7 @@ class CtxBody(BaseModel):
     delivered_at: str
 
 class TickBody(BaseModel):
-    now: str
+    merchant_id: Optional[str] = None
     available_triggers: List[str] = []
 
 class ReplyBody(BaseModel):
