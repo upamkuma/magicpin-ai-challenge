@@ -73,7 +73,7 @@ class ReplyBody(BaseModel):
 
 # ─── Endpoints ───
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     counts = {"category": 0, "merchant": 0, "customer": 0, "trigger": 0}
     for (scope, _) in contexts:
