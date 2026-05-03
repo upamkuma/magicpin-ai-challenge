@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 # Import the compose function from bot
-from bot import compose_message
+from bot import compose
 
 EXPANDED = Path(__file__).parent / "dataset" / "expanded"
 
@@ -58,7 +58,17 @@ def main():
         category = categories.get(cat_slug, {})
 
         conv_id = f"conv_{mid}_{trig_id}"
-        action = compose_message(category, merchant, trigger, customer, trig_id, conv_id)
+        kind = trigger.get("kind", "spike")
+        mapped_kind = kind
+        if kind == "perf_spike": mapped_kind = "spike"
+        elif kind == "perf_dip": mapped_kind = "dip"
+        elif kind == "recall_due": mapped_kind = "recall"
+        elif kind == "dormant_with_vera": mapped_kind = "inactivity"
+        elif kind == "festival_upcoming": mapped_kind = "festival"
+
+        res = compose(category, merchant, mapped_kind)
+        actions = res.get("actions", [])
+        action = actions[0] if actions else None
 
         if action:
             entry = {
@@ -66,11 +76,11 @@ def main():
                 "trigger_id": trig_id,
                 "merchant_id": mid,
                 "customer_id": cid,
-                "body": action["body"],
-                "cta": action["cta"],
-                "send_as": action["send_as"],
-                "suppression_key": action["suppression_key"],
-                "rationale": action["rationale"],
+                "body": action.get("message", ""),
+                "cta": action.get("cta", ""),
+                "send_as": action.get("send_as", ""),
+                "suppression_key": action.get("suppression_key", ""),
+                "rationale": action.get("rationale", ""),
             }
         else:
             # Fallback — compose a minimal valid message
