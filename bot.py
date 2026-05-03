@@ -174,14 +174,20 @@ async def reply(request: Request):
     msg = body.get("message", "").lower()
     from_role = body.get("from_role")
     
-    # 🔥 STOP handling (MANDATORY)
+    # 🔥 STOP / HOSTILE handling (MANDATORY)
     if "stop" in msg:
         return {"action": "end"}
+        
+    # Auto-reply detection
+    auto_patterns = ["thank you for contacting", "our team will respond", "automated assistant"]
+    if any(p in msg for p in auto_patterns):
+        return {"action": "end", "rationale": "auto reply detected"}
         
     # 🔥 CUSTOMER RESPONSE
     if from_role == "customer":
         return {
             "action": "send",
+            "body": "Your booking is confirmed. See you soon!",
             "reply": "Your booking is confirmed. See you soon!",
             "rationale": "customer intent handled"
         }
@@ -190,7 +196,8 @@ async def reply(request: Request):
     if from_role == "merchant":
         return {
             "action": "send",
-            "reply": "Got it. I'll optimize this for better conversions.",
+            "body": "Got it. I'll optimize this for better conversions. Done, sending draft next.",
+            "reply": "Got it. I'll optimize this for better conversions. Done, sending draft next.",
             "rationale": "merchant support"
         }
         
